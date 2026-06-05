@@ -1,34 +1,50 @@
 # cc-fasrc
 
 Run Claude Code **perpetually on a FASRC login node**, with writes confined to
-your lab directory by Claude Code's **native (bubblewrap) sandbox** — while
-`sbatch`, `squeue`, `uv`, and `node` all work normally.
+your lab directory — while `sbatch`, `squeue`, `uv`, and `node` all work normally.
 
 ```bash
 ssh you@login.rc.fas.harvard.edu
 git clone https://github.com/heyodog0/cc-fasrc.git ~/code/cc-fasrc
 cd ~/code/cc-fasrc
 CC_SANDBOX_DIR=/n/holylabs/<your_lab>/Users/$USER CC_REMOTE_CONTROL=1 ./install.sh
-cc-doctor      # verify the sandbox can enforce on this node
+cc-doctor      # verify everything on this node
 cc-up          # start (or reattach) the perpetual session
 ```
 
-## What it does
+## How it confines writes
 
-- **Writes confined to one tree.** The native sandbox (bubblewrap on Linux) lets
-  bash write only under `$CC_SANDBOX_DIR` (your lab dir), `/tmp`, and the package
-  caches (`~/.cache`, `~/.config`, `~/.local`). Everything else is read-only,
-  **enforced by the kernel** — not a heuristic. Fails closed: if bubblewrap can't
-  start, `cc` refuses to run rather than run unconfined.
-- **`sbatch` still works.** Slurm commands (`sbatch`, `squeue`, `sacct`, `srun`,
-  …) are listed in `sandbox.excludedCommands`, so they run *outside* the sandbox
-  with full munge/network access. CC submits jobs, polls `squeue`/`sacct`, and
-  tails logs natively.
+A **PreToolUse guard hook** (`guard-write.py`, pure Python — no extra dependencies)
+gates every tool call:
+
+| Tool | Enforcement |
+|------|-------------|
+| `Write` / `Edit` / `NotebookEdit` | **Hard.** `file_path` is resolved; outside `$CC_SANDBOX_DIR` (+ `/tmp`, `~/.cache`, `~/.config`, `~/.local`) → blocked. Covers ~95% of CC's file changes. |
+| `Bash` | **Best-effort, source/dest aware.** Blocks `rm -rf /`, redirects, and `mv`/`cp`/`rm`/`chmod`/… whose *destination* is outside the sandbox — while allowing reads from anywhere (`cp /n/shared/data ./`) and letting `sbatch`/`squeue`/`uv`/`node` run untouched. |
+
+This is tuned for **"don't let CC make a destructive mistake,"** not for confining a
+malicious agent — a contrived shell one-liner could still slip the Bash heuristic.
+Plus `deny` rules in `settings.json` for `~/.bashrc`/`~/.ssh`/etc., and the guard
+protects its own script from being edited by CC.
+
+> Why a hook and not Claude Code's native OS sandbox? The native sandbox
+> (bubblewrap) needs `socat`, which FASRC login nodes don't have — and it would
+> also namespace the network, complicating `sbatch`. The hook needs nothing but
+> Python and leaves Slurm/network alone. (If you're on a box *with* `socat`, the
+> native `sandbox.enabled` is the stronger choice — see the sandboxing docs.)
+
+## Why it's useful (vs. just settings.json)
+
+Most of cc-fasrc isn't the guard — it's the operational layer for running CC
+perpetually on a cluster, none of which comes from a config file:
+
 - **No results bottleneck.** Jobs write `outputs/`/`logs/` into the same lab tree
   CC sits in, so CC reads progress live — no rsync, no W&B round-trip.
-- **Perpetual + reachable.** Runs in a `tmux` that survives disconnects; reattach
-  from any device. Starts in `auto` permission mode with Remote Control active
-  (steer from claude.ai / the mobile app).
+- **Perpetual + reachable.** A `tmux` that survives disconnects; reattach from any
+  device. Starts in `auto` permission mode with Remote Control active.
+- **Bash path-confinement that config can't express.** Claude Code's `deny` rules
+  don't apply to subprocess writes (`echo > file`, a python script) — only the
+  native sandbox or a hook can confine those. This is the hook.
 
 ## Commands
 
@@ -36,30 +52,20 @@ cc-up          # start (or reattach) the perpetual session
 cc-up [name]     start or reattach the session (default name: cc)
 ccd  [name]      start detached and return immediately (launch-and-leave)
 cck  [name]      kill the session
-cc-doctor        preflight: bwrap, user namespaces, claude, sbatch, settings, auth
+cc-doctor        preflight: python3, tmux, claude, sbatch, settings, guard, auth
 cc               raw sandboxed launcher (cc-up/ccd call this; aliased from `claude`)
 ```
 
 Inside tmux: `Ctrl-b d` detach · `Ctrl-b :kill-session` kill.
 
-## Requirements (checked by cc-doctor)
-
-- A **login node** (not a SLURM job — CC's bash tool needs `/run/user`).
-- **bubblewrap** (`/usr/bin/bwrap`) + working **unprivileged user namespaces**
-  (`unshare --user --map-root-user true`). Both present on FASRC bos/holy login
-  nodes.
-- `claude`, `node`, `tmux` on PATH. FASRC has no nodejs module — bootstrap a
-  portable node (e.g. via your project's setup script) first; cc-fasrc only
-  sandboxes CC, it doesn't install it.
-
 ## Two environments (important)
 
-- **CC's session** — login node, sandboxed. CC edits code and submits jobs.
-- **The SLURM job** — compute node, *outside* any sandbox, full GPU/CUDA access.
+- **CC's session** — login node, write-confined. CC edits code and submits jobs.
+- **The SLURM job** — compute node, *outside* the sandbox, full GPU/CUDA access.
   That's correct: you never wanted to sandbox the training run.
 
-So **bootstrap your toolchain as yourself, once** (install node/uv, clone repos);
-let a human run that, not CC. Keep CC a coordinator that `sbatch`es and polls —
+So **bootstrap your toolchain as yourself, once** (install node/uv, clone repos) —
+let a human run that, not CC. Keep CC a coordinator that `sbatch`es and polls;
 heavy compute goes out as jobs, not on the login node.
 
 ## Login-node pinning
@@ -83,17 +89,10 @@ Or run `cc` once and complete the OAuth URL by hand — the token persists.
 
 ```
 install.sh                 one-time setup (idempotent)
-config/settings.json.tmpl  the sandbox config, templated per-account
+config/settings.json.tmpl  deny rules + guard hook registration, templated
+hooks/guard-write.py       the write-confinement guard (run --selftest to verify)
 bin/cc                     sandboxed launcher (sets CLAUDE_CONFIG_DIR + auto mode)
 bin/cc-up bin/ccd bin/cck  tmux lifecycle
 bin/cc-doctor              preflight verifier
 config.env                 generated by install.sh — edit CC_SANDBOX_DIR here
 ```
-
-## Tuning the boundary
-
-Everything lives in the rendered `settings.json` (at `$CC_SANDBOX_DIR/.cc/.claude/`).
-Change it from a plain shell, or edit `config/settings.json.tmpl` and re-run
-`install.sh`. Key fields: `sandbox.filesystem.allowWrite` (writable paths),
-`sandbox.excludedCommands` (commands that run unsandboxed). See
-https://code.claude.com/docs/en/sandboxing for the full schema.
