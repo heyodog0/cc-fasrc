@@ -15,10 +15,14 @@ if [ -n "${SLURM_JOB_ID:-}" ]; then
 fi
 
 # ── 1. The one writable tree ────────────────────────────────────────────────
-SANDBOX="${CC_SANDBOX_DIR:-/n/holylabs/gershman_lab/Users/$USER}"
+SANDBOX="${CC_SANDBOX_DIR:-}"
+if [ -z "$SANDBOX" ]; then
+  echo "ERROR: set CC_SANDBOX_DIR to your writable project tree (the one dir CC may"
+  echo "       write to), e.g.:  CC_SANDBOX_DIR=/n/holylabs/<your_lab>/Users/$USER ./install.sh"
+  exit 1
+fi
 if [ ! -d "$SANDBOX" ]; then
-  echo "ERROR: sandbox root '$SANDBOX' does not exist."
-  echo "       Set it explicitly:  CC_SANDBOX_DIR=/n/holylabs/.../you ./install.sh"
+  echo "ERROR: sandbox root '$SANDBOX' does not exist — create it or fix the path."
   exit 1
 fi
 CCHOME="$SANDBOX/.cc"                       # CC's config/state, kept inside the sandbox

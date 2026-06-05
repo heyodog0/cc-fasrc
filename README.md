@@ -10,7 +10,7 @@ launch in any tmux pane is sandboxed by default.
 ssh you@login.rc.fas.harvard.edu
 git clone <this-repo> ~/code/cc-fasrc
 cd ~/code/cc-fasrc
-CC_SANDBOX_DIR=/n/holylabs/gershman_lab/Users/rtruong ./install.sh
+CC_SANDBOX_DIR=/n/holylabs/<your_lab>/Users/$USER ./install.sh
 cc-doctor      # verify every assumption on this node (run this first)
 cc-up          # perpetual sandboxed CC in a pinned tmux
 ```
@@ -63,10 +63,10 @@ if you need a hard kernel guarantee, see *Apptainer mode* below.
 - **The SLURM job** — compute node, *outside* the sandbox, full GPU/CUDA/module
   access. This is correct: you never wanted to sandbox the training run.
 
-Because of this, **bootstrap your toolchain separately, as yourself** (e.g.
-`analogen/setup_fasrc.sh` with `CODE_DIR=$CC_SANDBOX_DIR/code`). That script
-legitimately writes the toolchain into `~/.local` and env into `~/.bashrc` so the
-*compute-node job* inherits it — let a human run it once, not CC.
+Because of this, **bootstrap your toolchain separately, as yourself** (your
+project's own setup script — installing node/uv/conda, cloning repos, etc.). That
+step legitimately writes the toolchain into `~/.local` and env into `~/.bashrc` so
+the *compute-node job* inherits it — let a human run it once, not CC.
 
 ## Perpetual session
 
