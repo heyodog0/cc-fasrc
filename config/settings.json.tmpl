@@ -1,27 +1,26 @@
 {
   "remoteControlAtStartup": @REMOTE@,
   "skipAutoPermissionPrompt": true,
-  "permissions": {
-    "defaultMode": "auto",
-    "deny": [
-      "Write(@HOME@/.bashrc)",  "Edit(@HOME@/.bashrc)",
-      "Write(@HOME@/.zshrc)",   "Edit(@HOME@/.zshrc)",
-      "Write(@HOME@/.profile)", "Edit(@HOME@/.profile)",
-      "Write(@HOME@/.ssh/**)",  "Edit(@HOME@/.ssh/**)",
-      "Write(@CCHOME@/.claude/guard-write.py)", "Edit(@CCHOME@/.claude/guard-write.py)"
-    ]
-  },
-  "env": {
-    "CC_SANDBOX_DIR": "@SANDBOX@"
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit|NotebookEdit|Bash",
-        "hooks": [
-          { "type": "command", "command": "@CCHOME@/.claude/guard-write.py" }
-        ]
-      }
+  "permissions": { "defaultMode": "auto" },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": {
+      "allowWrite": [
+        "@SANDBOX@",
+        "/tmp",
+        "@HOME@/.cache",
+        "@HOME@/.config",
+        "@HOME@/.local"
+      ]
+    },
+    "network": {
+      "allowAllUnixSockets": true
+    },
+    "excludedCommands": [
+      "sbatch*", "squeue*", "sacct*", "scancel*", "sinfo*", "scontrol*",
+      "srun*", "salloc*", "sattach*", "sbcast*"
     ]
   }
 }

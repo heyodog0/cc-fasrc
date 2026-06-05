@@ -1,30 +1,23 @@
 #!/usr/bin/env bash
-# Launch Claude Code sandboxed to the cc-fasrc writable tree.
-# Every invocation applies the guard hook + deny rules from config.env.
+# Launch Claude Code with the cc-fasrc native sandbox (writes confined to the
+# sandbox tree by bubblewrap; Slurm commands excluded so sbatch works natively).
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 . "$HERE/config.env"
 
-# CC reads settings.json + the guard hook from here (NOT your real ~/.claude),
-# so these sandbox rules apply to `cc` only and don't touch other CC usage.
+# CC reads settings.json (which enables the sandbox) from here, NOT your real
+# ~/.claude — so these rules apply to `cc` only.
 export CLAUDE_CONFIG_DIR="$CC_HOME/.claude"
-export CC_SANDBOX_DIR
-export TMPDIR="$CC_SANDBOX_DIR/.tmp"; mkdir -p "$TMPDIR"
 
 # Headless auth if a key file was dropped (keeps it out of shell history).
 if [ -f "$CC_HOME/.claude/api-key" ]; then
   ANTHROPIC_API_KEY="$(cat "$CC_HOME/.claude/api-key")"; export ANTHROPIC_API_KEY
 fi
 
-# Always start inside the sandbox so relative work can't wander.
+# Always start inside the sandbox tree.
 case "$PWD/" in
   "$CC_SANDBOX_DIR"/*) : ;;
   *) cd "$CC_SANDBOX_DIR" ;;
 esac
 
-# CC_MODE is a CLI flag that overrides settings.json defaultMode. Use CC_MODE=none
-# to drop the flag and let settings.json (defaultMode) govern instead.
-case "${CC_MODE:-auto}" in
-  none) exec "${CLAUDE_BIN:-claude}" "$@" ;;
-  *)    exec "${CLAUDE_BIN:-claude}" --permission-mode "${CC_MODE:-auto}" "$@" ;;
-esac
+exec "${CLAUDE_BIN:-claude}" --permission-mode "${CC_MODE:-auto}" "$@"

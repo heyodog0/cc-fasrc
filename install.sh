@@ -40,15 +40,12 @@ if [ -z "$CLAUDE_BIN" ]; then
 fi
 echo "==> claude binary           : $CLAUDE_BIN"
 
-# ── 3. Render settings.json + guard hook into the CC config dir ──────────────
+# ── 3. Render settings.json (enables the native bubblewrap sandbox) ──────────
 # CC_REMOTE_CONTROL=1 turns on remote control (steer from claude.ai/mobile) at startup.
 REMOTE=$([ "${CC_REMOTE_CONTROL:-0}" = "1" ] && echo true || echo false)
-sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
+sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@REMOTE@#$REMOTE#g" \
     "$REPO_DIR/config/settings.json.tmpl" > "$CCHOME/.claude/settings.json"
-sed -e "s#@SANDBOX@#$SANDBOX#g" \
-    "$REPO_DIR/hooks/guard-write.py" > "$CCHOME/.claude/guard-write.py"
-chmod 0755 "$CCHOME/.claude/guard-write.py"
-echo "==> wrote settings.json + guard-write.py"
+echo "==> wrote settings.json (sandbox.enabled=true, writes confined to $SANDBOX)"
 
 # ── 4. Pre-seed github host key so CC can git push/pull without prompts ──────
 mkdir -p "$CCHOME/.ssh"
@@ -72,13 +69,10 @@ echo "==> wrote $REPO_DIR/config.env"
 
 # ── 6. Put cc / cc-up on PATH ────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
-for b in cc cc-up ccd cck cc-doctor cc-iso cc-proxyd cc-approve; do
+for b in cc cc-up ccd cck cc-doctor; do
   ln -sfn "$REPO_DIR/bin/$b" "$HOME/.local/bin/$b"
 done
-echo "==> linked cc, cc-up, ccd, cck, cc-doctor, cc-iso, cc-proxyd, cc-approve -> ~/.local/bin"
-
-# Slurm submit-proxy queue dirs (used only by Apptainer/iso mode; harmless otherwise)
-mkdir -p "$SANDBOX/.cc/slurm-proxy"/{requests,results,processed,approve}
+echo "==> linked cc, cc-up, ccd, cck, cc-doctor -> ~/.local/bin"
 
 # ── 7. Make sandboxed CC the default in your shells ─────────────────────────
 TAG="# cc-fasrc"
@@ -102,11 +96,14 @@ if [ ! -f "$CCHOME/.claude/api-key" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo "      Or run 'cc' once and complete the OAuth URL by hand (token persists)."
 fi
 
-# ── 9. Validate the guard rules end-to-end ──────────────────────────────────
+# ── 9. Verify the sandbox can actually enforce on this node ─────────────────
 echo
-echo "==> guard hook self-test:"
-CC_SANDBOX_DIR="$SANDBOX" python3 "$CCHOME/.claude/guard-write.py" --selftest \
-  || echo "   WARN: some guard cases failed — run cc-doctor for detail."
+if command -v bwrap >/dev/null && unshare --user --map-root-user true 2>/dev/null; then
+  echo "==> sandbox deps OK (bwrap + user namespaces) — enforcement will work"
+else
+  echo "   WARN: bwrap or user namespaces unavailable here. With failIfUnavailable=true,"
+  echo "         'cc' will REFUSE to start (fail-closed). Run cc-doctor for detail."
+fi
 
 echo
 echo "=== cc-fasrc installed ==="
