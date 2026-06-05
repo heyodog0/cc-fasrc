@@ -63,8 +63,10 @@ cat > "$REPO_DIR/config.env" <<EOF
 CC_SANDBOX_DIR="$SANDBOX"
 CC_HOME="$CCHOME"
 CLAUDE_BIN="$CLAUDE_BIN"
-# permission mode for unattended runs: acceptEdits (default) | bypassPermissions
-CC_MODE="\${CC_MODE:-acceptEdits}"
+# startup permission mode (CLI flag, overrides settings.json defaultMode):
+#   auto (default) | acceptEdits | bypassPermissions | default | plan
+# Set CC_MODE=none to drop the flag entirely and let settings.json govern.
+CC_MODE="\${CC_MODE:-auto}"
 EOF
 echo "==> wrote $REPO_DIR/config.env"
 

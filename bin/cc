@@ -22,4 +22,9 @@ case "$PWD/" in
   *) cd "$CC_SANDBOX_DIR" ;;
 esac
 
-exec "${CLAUDE_BIN:-claude}" --permission-mode "${CC_MODE:-acceptEdits}" "$@"
+# CC_MODE is a CLI flag that overrides settings.json defaultMode. Use CC_MODE=none
+# to drop the flag and let settings.json (defaultMode) govern instead.
+case "${CC_MODE:-auto}" in
+  none) exec "${CLAUDE_BIN:-claude}" "$@" ;;
+  *)    exec "${CLAUDE_BIN:-claude}" --permission-mode "${CC_MODE:-auto}" "$@" ;;
+esac
