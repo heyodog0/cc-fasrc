@@ -6,8 +6,12 @@ set -euo pipefail
 SESS="${1:-cc}"
 HOST="$(hostname -s)"
 
+# Record where the session lives so reconnection is unambiguous across the
+# round-robin login nodes (FASRC has several; tmux lives on exactly one).
+echo "$HOST" > "$HOME/.cc-fasrc-host"
+
 echo "cc-fasrc session : $SESS"
-echo "pinned to node   : $HOST"
+echo "pinned to node   : $HOST   (saved to ~/.cc-fasrc-host)"
 echo "reconnect later  : ssh <you>@${HOST}.rc.fas.harvard.edu  then  cc-up"
 echo
 

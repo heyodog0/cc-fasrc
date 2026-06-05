@@ -64,9 +64,10 @@ echo "==> wrote $REPO_DIR/config.env"
 
 # ── 6. Put cc / cc-up on PATH ────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
-ln -sfn "$REPO_DIR/bin/cc"    "$HOME/.local/bin/cc"
-ln -sfn "$REPO_DIR/bin/cc-up" "$HOME/.local/bin/cc-up"
-echo "==> linked cc, cc-up -> ~/.local/bin"
+ln -sfn "$REPO_DIR/bin/cc"        "$HOME/.local/bin/cc"
+ln -sfn "$REPO_DIR/bin/cc-up"     "$HOME/.local/bin/cc-up"
+ln -sfn "$REPO_DIR/bin/cc-doctor" "$HOME/.local/bin/cc-doctor"
+echo "==> linked cc, cc-up, cc-doctor -> ~/.local/bin"
 
 # ── 7. Make sandboxed CC the default in your shells ─────────────────────────
 TAG="# cc-fasrc"
@@ -90,18 +91,18 @@ if [ ! -f "$CCHOME/.claude/api-key" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo "      Or run 'cc' once and complete the OAuth URL by hand (token persists)."
 fi
 
-# ── 9. Validate the guard actually blocks an out-of-sandbox write ────────────
+# ── 9. Validate the guard rules end-to-end ──────────────────────────────────
 echo
-echo "==> validating guard hook ..."
-if printf '{"tool_name":"Write","tool_input":{"file_path":"%s/.bashrc"}}' "$HOME" \
-     | python3 "$CCHOME/.claude/guard-write.py" >/dev/null 2>&1; then
-  echo "   WARN: guard did NOT block a write to ~/.bashrc — check python3/settings."
-else
-  echo "   OK: write to ~/.bashrc is blocked; writes under $SANDBOX are allowed."
-fi
+echo "==> guard hook self-test:"
+CC_SANDBOX_DIR="$SANDBOX" python3 "$CCHOME/.claude/guard-write.py" --selftest \
+  || echo "   WARN: some guard cases failed — run cc-doctor for detail."
 
 echo
 echo "=== cc-fasrc installed ==="
-echo "Start (or reattach) your perpetual sandboxed session:"
-echo "    cc-up"
-echo "Reconnect later from any device — pin to THIS login node:  ssh \$(hostname)"
+echo "Next:"
+echo "    cc-doctor        # verify everything on this node (do this first)"
+echo "    cc-up            # start/reattach the perpetual sandboxed session"
+echo
+echo "NOTE: the 'claude'->cc alias applies in NEW shells. In THIS one, type 'cc'"
+echo "      (or run: source ~/.bashrc). Reconnect later pinned to THIS login node:"
+echo "      ssh \$(hostname).rc.fas.harvard.edu"
