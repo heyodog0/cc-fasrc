@@ -38,10 +38,19 @@ def _real(p):
     return os.path.realpath(os.path.abspath(p))
 
 
+# The guard script lives inside the sandbox (writable), so without this CC could
+# edit it to disable its own boundary. Protect it — changing it is a human-only
+# action from a plain shell. (settings.json is left editable so in-session mode
+# toggles still work.)
+PROTECTED = {_real(os.path.join(SANDBOX, ".cc", ".claude", "guard-write.py"))}
+
+
 def allowed(path):
     if path in PASS_DEVS:
         return True
     rp = _real(path)
+    if rp in PROTECTED:
+        return False
     for root in WRITABLE:
         if not root:
             continue
@@ -104,6 +113,8 @@ def evaluate(tool, ti):
     try:
         if tool in ("Write", "Edit", "NotebookEdit"):
             p = ti.get("file_path") or ti.get("notebook_path")
+            if p and _real(p) in PROTECTED:
+                return f"{tool} -> {p} is the cc-fasrc guard; edit it from a plain shell, not via CC"
             if p and not allowed(p):
                 return f"{tool} -> {p} is outside the sandbox"
             return None
@@ -122,6 +133,7 @@ def evaluate(tool, ti):
 def selftest():
     cases = [
         ("Write", {"file_path": f"{SANDBOX}/analogen/x.py"}, False),
+        ("Write", {"file_path": f"{SANDBOX}/.cc/.claude/guard-write.py"}, True),
         ("Write", {"file_path": f"{HOME}/.bashrc"}, True),
         ("Edit",  {"file_path": "/etc/passwd"}, True),
         ("Bash",  {"command": "sbatch run.sh configs/smokes/smoke.json"}, False),

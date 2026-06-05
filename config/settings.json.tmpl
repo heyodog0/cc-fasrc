@@ -1,11 +1,13 @@
 {
+  "remoteControlAtStartup": @REMOTE@,
   "permissions": {
-    "defaultMode": "acceptEdits",
+    "defaultMode": "auto",
     "deny": [
       "Write(@HOME@/.bashrc)",  "Edit(@HOME@/.bashrc)",
       "Write(@HOME@/.zshrc)",   "Edit(@HOME@/.zshrc)",
       "Write(@HOME@/.profile)", "Edit(@HOME@/.profile)",
-      "Write(@HOME@/.ssh/**)",  "Edit(@HOME@/.ssh/**)"
+      "Write(@HOME@/.ssh/**)",  "Edit(@HOME@/.ssh/**)",
+      "Write(@CCHOME@/.claude/guard-write.py)", "Edit(@CCHOME@/.claude/guard-write.py)"
     ]
   },
   "env": {

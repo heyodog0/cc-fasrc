@@ -41,7 +41,9 @@ fi
 echo "==> claude binary           : $CLAUDE_BIN"
 
 # ── 3. Render settings.json + guard hook into the CC config dir ──────────────
-sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" \
+# CC_REMOTE_CONTROL=1 turns on remote control (steer from claude.ai/mobile) at startup.
+REMOTE=$([ "${CC_REMOTE_CONTROL:-0}" = "1" ] && echo true || echo false)
+sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
     "$REPO_DIR/config/settings.json.tmpl" > "$CCHOME/.claude/settings.json"
 sed -e "s#@SANDBOX@#$SANDBOX#g" \
     "$REPO_DIR/hooks/guard-write.py" > "$CCHOME/.claude/guard-write.py"

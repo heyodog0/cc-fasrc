@@ -24,8 +24,13 @@ can't check** is whether your CC build honors `CLAUDE_CONFIG_DIR` — so after
 listed), or ask CC to write to `~/.bashrc` and confirm it's blocked. That's the
 real proof the sandbox is live.
 
-For unattended/walk-away runs, `acceptEdits` still prompts on Bash — set
-`CC_MODE=bypassPermissions` in `config.env` (the guard hook stays the gate).
+**Defaults:** sessions start in `auto` permission mode (a safety classifier
+auto-handles prompts — good for unattended runs; the guard hook is still a hard
+pre-filter underneath). Pass `CC_REMOTE_CONTROL=1 ./install.sh` to also turn on
+remote control (steer the session from claude.ai / the mobile app) at startup.
+Both live in the rendered `settings.json`; change them there (from a plain shell)
+or re-run the installer. Note the guard protects its own `guard-write.py` from
+being edited by CC — config changes are a human action, not an agent one.
 
 ## What it gives you
 
