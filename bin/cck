@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Kill a sandboxed CC tmux session.   cck [session]   (default session: cc)
+set -euo pipefail
+SESS="${1:-cc}"
+if tmux has-session -t "$SESS" 2>/dev/null; then
+  tmux kill-session -t "$SESS" && echo "killed cc session '$SESS'"
+else
+  echo "no cc session '$SESS' running"
+  echo "running sessions:"; tmux ls 2>/dev/null | sed 's/^/  /' || echo "  (none)"
+fi

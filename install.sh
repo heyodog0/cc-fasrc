@@ -72,10 +72,10 @@ echo "==> wrote $REPO_DIR/config.env"
 
 # ── 6. Put cc / cc-up on PATH ────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
-for b in cc cc-up ccd cc-doctor cc-iso cc-proxyd cc-approve; do
+for b in cc cc-up ccd cck cc-doctor cc-iso cc-proxyd cc-approve; do
   ln -sfn "$REPO_DIR/bin/$b" "$HOME/.local/bin/$b"
 done
-echo "==> linked cc, cc-up, ccd, cc-doctor, cc-iso, cc-proxyd, cc-approve -> ~/.local/bin"
+echo "==> linked cc, cc-up, ccd, cck, cc-doctor, cc-iso, cc-proxyd, cc-approve -> ~/.local/bin"
 
 # Slurm submit-proxy queue dirs (used only by Apptainer/iso mode; harmless otherwise)
 mkdir -p "$SANDBOX/.cc/slurm-proxy"/{requests,results,processed,approve}
