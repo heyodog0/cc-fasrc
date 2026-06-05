@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Create or reattach the perpetual sandboxed CC tmux session.
+# tmux keeps CC alive across SSH disconnects. Note the login-node hostname:
+# FASRC load-balances several login nodes and the session lives on ONE of them.
+set -euo pipefail
+SESS="${1:-cc}"
+HOST="$(hostname -s)"
+
+echo "cc-fasrc session : $SESS"
+echo "pinned to node   : $HOST"
+echo "reconnect later  : ssh <you>@${HOST}.rc.fas.harvard.edu  then  cc-up"
+echo
+
+# Reattach if it exists; otherwise create it running `cc`. `exec bash` keeps the
+# pane alive after CC exits so you can relaunch without losing the window.
+if tmux has-session -t "$SESS" 2>/dev/null; then
+  exec tmux attach -t "$SESS"
+else
+  exec tmux new -s "$SESS" "cc; exec bash"
+fi

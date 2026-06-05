@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": [
+      "Write(@HOME@/.bashrc)",  "Edit(@HOME@/.bashrc)",
+      "Write(@HOME@/.zshrc)",   "Edit(@HOME@/.zshrc)",
+      "Write(@HOME@/.profile)", "Edit(@HOME@/.profile)",
+      "Write(@HOME@/.ssh/**)",  "Edit(@HOME@/.ssh/**)"
+    ]
+  },
+  "env": {
+    "CC_SANDBOX_DIR": "@SANDBOX@"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "@CCHOME@/.claude/guard-write.py" }
+        ]
+      }
+    ]
+  }
+}

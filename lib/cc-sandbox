@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# OPT-IN Apptainer hardening wrapper (see README "Apptainer mode").
+# Kernel-hard write boundary: only $CC_SANDBOX_DIR is bound read-write.
+#
+# NOTE: to let CC submit SLURM jobs from inside, append the host Slurm binds —
+# run on a login node to discover them:
+#   which sbatch squeue sacct; ldd "$(which sbatch)"; ls -d /etc/slurm /run/munge
+# then add: --bind /etc/slurm --bind /run/munge --bind "$(which sbatch)" ...
+# If the host binary won't run under the image glibc, use a host-side submit proxy.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+. "$HERE/config.env"
+SIF="${CC_SIF:-$HERE/cc.sif}"
+
+[ -f "$SIF" ] || { echo "build the image first:  apptainer build $SIF $HERE/cc.def"; exit 1; }
+
+exec apptainer exec \
+    --containall \
+    --writable-tmpfs \
+    --bind "$CC_SANDBOX_DIR":"$CC_SANDBOX_DIR" \
+    --bind "$HOME/.ssh":"/home/cc/.ssh":ro \
+    --pwd "$CC_SANDBOX_DIR" \
+    --env HOME="$CC_SANDBOX_DIR/.cc" \
+    --env CLAUDE_CONFIG_DIR="$CC_SANDBOX_DIR/.cc/.claude" \
+    --env CC_SANDBOX_DIR="$CC_SANDBOX_DIR" \
+    --env TMPDIR="$CC_SANDBOX_DIR/.tmp" \
+    "$SIF" \
+    claude --permission-mode "${CC_MODE:-acceptEdits}" "$@"

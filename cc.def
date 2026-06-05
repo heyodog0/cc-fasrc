@@ -1,0 +1,16 @@
+Bootstrap: docker
+From: node:22-bookworm-slim
+
+# OPT-IN hardening image (see README "Apptainer mode"). Self-contained toolchain
+# so CC can edit + run smokes without binding host node/uv. Submitting SLURM jobs
+# from inside still needs host sbatch+munge bound in (glibc-fragile) or a proxy.
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        git ca-certificates curl openssh-client rsync
+    npm install -g @anthropic-ai/claude-code pnpm@9.15.0
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+    rm -rf /var/lib/apt/lists/*
+
+%environment
+    export HOME=/home/cc
