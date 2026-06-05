@@ -40,15 +40,32 @@ if [ -z "$CLAUDE_BIN" ]; then
 fi
 echo "==> claude binary           : $CLAUDE_BIN"
 
-# ── 3. Render settings.json + guard hook into the CC config dir ──────────────
+# ── 3. Pick enforcement mode + render settings.json ─────────────────────────
+# native = Claude Code's bubblewrap sandbox (kernel-enforced). Needs bwrap + socat
+#          + working user namespaces. Strictly stronger.
+# hook   = python PreToolUse guard (no deps, regex-based). Fallback when the above
+#          aren't available.
+# Auto-detected; override with CC_FORCE_MODE=native|hook.
 # CC_REMOTE_CONTROL=1 turns on remote control (steer from claude.ai/mobile) at startup.
 REMOTE=$([ "${CC_REMOTE_CONTROL:-0}" = "1" ] && echo true || echo false)
-sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
-    "$REPO_DIR/config/settings.json.tmpl" > "$CCHOME/.claude/settings.json"
-sed -e "s#@SANDBOX@#$SANDBOX#g" \
-    "$REPO_DIR/hooks/guard-write.py" > "$CCHOME/.claude/guard-write.py"
-chmod 0755 "$CCHOME/.claude/guard-write.py"
-echo "==> wrote settings.json + guard-write.py"
+native_ok() { command -v bwrap >/dev/null && command -v socat >/dev/null \
+              && unshare --user --map-root-user true 2>/dev/null; }
+MODE="${CC_FORCE_MODE:-}"
+[ -z "$MODE" ] && { native_ok && MODE=native || MODE=hook; }
+
+if [ "$MODE" = native ]; then
+  sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@REMOTE@#$REMOTE#g" \
+      "$REPO_DIR/config/settings.native.json.tmpl" > "$CCHOME/.claude/settings.json"
+  rm -f "$CCHOME/.claude/guard-write.py"
+  echo "==> mode: NATIVE sandbox (bubblewrap, kernel-enforced) — writes confined to $SANDBOX"
+else
+  sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
+      "$REPO_DIR/config/settings.hook.json.tmpl" > "$CCHOME/.claude/settings.json"
+  sed -e "s#@SANDBOX@#$SANDBOX#g" \
+      "$REPO_DIR/hooks/guard-write.py" > "$CCHOME/.claude/guard-write.py"
+  chmod 0755 "$CCHOME/.claude/guard-write.py"
+  echo "==> mode: HOOK fallback (no bwrap/socat) — guard hook confines writes to $SANDBOX"
+fi
 
 # ── 4. Pre-seed github host key so CC can git push/pull without prompts ──────
 mkdir -p "$CCHOME/.ssh"
@@ -63,6 +80,7 @@ cat > "$REPO_DIR/config.env" <<EOF
 CC_SANDBOX_DIR="$SANDBOX"
 CC_HOME="$CCHOME"
 CLAUDE_BIN="$CLAUDE_BIN"
+CC_FASRC_MODE="$MODE"   # native (bubblewrap) | hook (python guard)
 # startup permission mode (CLI flag, overrides settings.json defaultMode):
 #   auto (default) | acceptEdits | bypassPermissions | default | plan
 # Set CC_MODE=none to drop the flag entirely and let settings.json govern.
@@ -99,11 +117,16 @@ if [ ! -f "$CCHOME/.claude/api-key" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo "      Or run 'cc' once and complete the OAuth URL by hand (token persists)."
 fi
 
-# ── 9. Validate the guard rules end-to-end ──────────────────────────────────
+# ── 9. Validate the chosen mode ─────────────────────────────────────────────
 echo
-echo "==> guard hook self-test:"
-CC_SANDBOX_DIR="$SANDBOX" python3 "$CCHOME/.claude/guard-write.py" --selftest \
-  || echo "   WARN: some guard cases failed — run cc-doctor for detail."
+if [ "$MODE" = native ]; then
+  echo "==> native sandbox deps: bwrap=$(command -v bwrap) socat=$(command -v socat)"
+  echo "    (failIfUnavailable=true — cc refuses to start if these vanish)"
+else
+  echo "==> guard hook self-test:"
+  CC_SANDBOX_DIR="$SANDBOX" python3 "$CCHOME/.claude/guard-write.py" --selftest \
+    || echo "   WARN: some guard cases failed — run cc-doctor for detail."
+fi
 
 echo
 echo "=== cc-fasrc installed ==="

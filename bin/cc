@@ -10,6 +10,9 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 export CLAUDE_CONFIG_DIR="$CC_HOME/.claude"
 export CC_SANDBOX_DIR
 export TMPDIR="$CC_SANDBOX_DIR/.tmp"; mkdir -p "$TMPDIR"
+# Ensure the native sandbox can find bwrap/socat (and node/claude) regardless of
+# how the shell was started.
+export PATH="$HOME/.local/bin:$HOME/.local-node/bin:$PATH"
 
 # Headless auth if a key file was dropped (keeps it out of shell history).
 if [ -f "$CC_HOME/.claude/api-key" ]; then

@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # cc-fasrc preflight — run on a FASRC login node after install.sh.
-# Verifies every assumption the sandbox depends on. Prints PASS/FAIL/WARN.
+# Verifies everything the active mode (native sandbox or hook) depends on.
 set -uo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 [ -f "$HERE/config.env" ] || { echo "FAIL: no config.env — run ./install.sh first"; exit 1; }
 . "$HERE/config.env"
+MODE="${CC_FASRC_MODE:-hook}"
 
 fail=0
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 no()   { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
 
-echo "cc-fasrc doctor — sandbox: $CC_SANDBOX_DIR"
+echo "cc-fasrc doctor — mode: $MODE — sandbox: $CC_SANDBOX_DIR"
 echo
 
 # 1. login node, not a job
@@ -19,44 +20,48 @@ echo
   || no "inside a SLURM job — CC's bash tool needs a login node (see issue #21026)"
 
 # 2. core tooling
-command -v python3 >/dev/null && ok "python3: $(command -v python3)" || no "python3 missing (guard hook needs it)"
-command -v tmux    >/dev/null && ok "tmux: $(command -v tmux)"       || no "tmux missing (cc-up needs it)"
+command -v tmux >/dev/null && ok "tmux: $(command -v tmux)" || no "tmux missing (cc-up needs it)"
 command -v "${CLAUDE_BIN:-claude}" >/dev/null \
   && ok "claude: $("${CLAUDE_BIN:-claude}" --version 2>/dev/null | head -1)" \
   || no "claude not found — install it (npm i -g @anthropic-ai/claude-code)"
 
-# 3. slurm client present (so CC can submit/observe)
+# 3. mode-specific enforcement deps
+CFG="$CC_HOME/.claude"
+if [ "$MODE" = native ]; then
+  command -v bwrap >/dev/null && ok "bubblewrap: $(command -v bwrap)" || no "bwrap missing (native sandbox can't enforce)"
+  command -v socat >/dev/null && ok "socat: $(command -v socat)" || no "socat missing (sandbox refuses to start with failIfUnavailable)"
+  unshare --user --map-root-user true 2>/dev/null && ok "user namespaces work" || no "user namespaces blocked (sandbox can't start)"
+  if python3 -c "import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if d.get('sandbox',{}).get('enabled') else 1)" "$CFG/settings.json" 2>/dev/null
+  then ok "settings.json: sandbox.enabled=true"; else no "settings.json missing/invalid or sandbox not enabled"; fi
+else
+  command -v python3 >/dev/null && ok "python3: $(command -v python3)" || no "python3 missing (guard hook needs it)"
+  if [ -x "$CFG/guard-write.py" ] && CC_SANDBOX_DIR="$CC_SANDBOX_DIR" python3 "$CFG/guard-write.py" --selftest >/tmp/cc-guard.$$ 2>&1
+  then ok "guard hook self-test: $(tail -1 /tmp/cc-guard.$$)"; else no "guard self-test failed/missing"; cat /tmp/cc-guard.$$ 2>/dev/null; fi
+  rm -f /tmp/cc-guard.$$
+fi
+
+# 4. slurm client present
 command -v sbatch >/dev/null && command -v squeue >/dev/null \
   && ok "slurm client: $(command -v sbatch)" \
   || warn "sbatch/squeue not on PATH here — load it or check you're on a submit host"
 
-# 4. sandbox writable, and a probe outside it
+# 5. sandbox tree writable
 probe="$CC_SANDBOX_DIR/.cc/.doctor.$$"
-if touch "$probe" 2>/dev/null; then ok "sandbox is writable"; rm -f "$probe"
+if touch "$probe" 2>/dev/null; then ok "sandbox tree is writable"; rm -f "$probe"
 else no "cannot write to $CC_SANDBOX_DIR"; fi
 
-# 5. config dir + settings valid
-CFG="$CC_HOME/.claude"
-if [ -f "$CFG/settings.json" ] && python3 -c "import json,sys;json.load(open(sys.argv[1]))" "$CFG/settings.json" 2>/dev/null
-then ok "settings.json present + valid JSON"; else no "settings.json missing/invalid at $CFG"; fi
-
-# 6. guard self-test
-if [ -x "$CFG/guard-write.py" ]; then
-  if CC_SANDBOX_DIR="$CC_SANDBOX_DIR" python3 "$CFG/guard-write.py" --selftest >/tmp/cc-guard.$$ 2>&1
-  then ok "guard hook self-test: $(tail -1 /tmp/cc-guard.$$)"
-  else no "guard self-test FAILED:"; cat /tmp/cc-guard.$$; fi
-  rm -f /tmp/cc-guard.$$
-else no "guard-write.py missing/not executable at $CFG"; fi
-
-# 7. auth present (headless or stored)
+# 6. auth present
 if [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -f "$CFG/api-key" ] || [ -f "$CFG/.credentials.json" ]
 then ok "auth configured (key or stored credentials)"
 else warn "no API key / stored login — first 'cc' will need an interactive OAuth URL"; fi
 
 echo
-echo "Manual check the doctor CANNOT do for you:"
-echo "  start 'cc', then inside the session run  /hooks  — confirm the PreToolUse"
-echo "  guard is listed. Or ask CC to write to ~/.bashrc; it must be BLOCKED."
-echo "  (This is the real test that CLAUDE_CONFIG_DIR is honored by your CC build.)"
+if [ "$MODE" = native ]; then
+  echo "Manual check: start 'cc', ask it to write OUTSIDE the sandbox (e.g. to your"
+  echo "real \$HOME) — must fail with 'Read-only file system'. squeue/sbatch must work."
+else
+  echo "Manual check: start 'cc', run /hooks (guard must be listed), or ask it to write"
+  echo "to your real ~/.bashrc — must be BLOCKED."
+fi
 echo
 [ "$fail" -eq 0 ] && echo "=> all hard checks passed." || { echo "=> fix the FAIL items above."; exit 1; }

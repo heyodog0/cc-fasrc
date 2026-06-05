@@ -1,0 +1,18 @@
+{
+  "remoteControlAtStartup": @REMOTE@,
+  "skipAutoPermissionPrompt": true,
+  "permissions": { "defaultMode": "auto" },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": {
+      "allowWrite": [ "@SANDBOX@", "/tmp", "@HOME@/.cache", "@HOME@/.config", "@HOME@/.local" ]
+    },
+    "network": { "allowedDomains": ["*"], "allowAllUnixSockets": true },
+    "excludedCommands": [
+      "sbatch*", "squeue*", "sacct*", "scancel*", "sinfo*", "scontrol*",
+      "srun*", "salloc*", "sattach*", "sbcast*"
+    ]
+  }
+}
