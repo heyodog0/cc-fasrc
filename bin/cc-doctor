@@ -33,6 +33,10 @@ if [ "$MODE" = native ]; then
   unshare --user --map-root-user true 2>/dev/null && ok "user namespaces work" || no "user namespaces blocked (sandbox can't start)"
   if python3 -c "import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if d.get('sandbox',{}).get('enabled') else 1)" "$CFG/settings.json" 2>/dev/null
   then ok "settings.json: sandbox.enabled=true"; else no "settings.json missing/invalid or sandbox not enabled"; fi
+  # sandbox covers Bash; the hook covers Write/Edit/NotebookEdit (which bypass it)
+  if [ -x "$CFG/guard-write.py" ] && CC_SANDBOX_DIR="$CC_SANDBOX_DIR" python3 "$CFG/guard-write.py" --selftest >/tmp/cc-guard.$$ 2>&1
+  then ok "guard hook (Write/Edit) self-test: $(tail -1 /tmp/cc-guard.$$)"; else no "guard hook missing/failed — file tools unprotected"; fi
+  rm -f /tmp/cc-guard.$$
 else
   command -v python3 >/dev/null && ok "python3: $(command -v python3)" || no "python3 missing (guard hook needs it)"
   if [ -x "$CFG/guard-write.py" ] && CC_SANDBOX_DIR="$CC_SANDBOX_DIR" python3 "$CFG/guard-write.py" --selftest >/tmp/cc-guard.$$ 2>&1

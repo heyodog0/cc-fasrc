@@ -54,10 +54,14 @@ MODE="${CC_FORCE_MODE:-}"
 [ -z "$MODE" ] && { native_ok && MODE=native || MODE=hook; }
 
 if [ "$MODE" = native ]; then
-  sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@REMOTE@#$REMOTE#g" \
+  # native = bubblewrap sandbox for Bash (kernel) + guard hook for Write/Edit
+  # (the sandbox does NOT cover the file tools — they bypass it — so the hook
+  #  confines those; matcher excludes Bash, which the sandbox already handles).
+  sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
       "$REPO_DIR/config/settings.native.json.tmpl" > "$CCHOME/.claude/settings.json"
-  rm -f "$CCHOME/.claude/guard-write.py"
-  echo "==> mode: NATIVE sandbox (bubblewrap, kernel-enforced) — writes confined to $SANDBOX"
+  sed -e "s#@SANDBOX@#$SANDBOX#g" "$REPO_DIR/hooks/guard-write.py" > "$CCHOME/.claude/guard-write.py"
+  chmod 0755 "$CCHOME/.claude/guard-write.py"
+  echo "==> mode: NATIVE — bubblewrap sandbox (Bash, kernel) + guard hook (Write/Edit) — confined to $SANDBOX"
 else
   sed -e "s#@SANDBOX@#$SANDBOX#g" -e "s#@HOME@#$HOME#g" -e "s#@CCHOME@#$CCHOME#g" -e "s#@REMOTE@#$REMOTE#g" \
       "$REPO_DIR/config/settings.hook.json.tmpl" > "$CCHOME/.claude/settings.json"

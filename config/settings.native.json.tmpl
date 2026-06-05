@@ -2,6 +2,7 @@
   "remoteControlAtStartup": @REMOTE@,
   "skipAutoPermissionPrompt": true,
   "permissions": { "defaultMode": "auto" },
+  "env": { "CC_SANDBOX_DIR": "@SANDBOX@" },
   "sandbox": {
     "enabled": true,
     "failIfUnavailable": true,
@@ -13,6 +14,14 @@
     "excludedCommands": [
       "sbatch*", "squeue*", "sacct*", "scancel*", "sinfo*", "scontrol*",
       "srun*", "salloc*", "sattach*", "sbcast*"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "@CCHOME@/.claude/guard-write.py" } ]
+      }
     ]
   }
 }
