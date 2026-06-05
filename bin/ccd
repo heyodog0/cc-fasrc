@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Start sandboxed CC in a DETACHED tmux session and return immediately.
+# Launch-and-leave: deploy it, close your laptop, attach later with `cc-up`.
+# (Auth must already be set up — a detached first-run can't do interactive OAuth.)
+set -euo pipefail
+SESS="${1:-cc}"
+
+FQDN="$(hostname -f 2>/dev/null || true)"
+case "$FQDN" in
+  *.rc.fas.harvard.edu) : ;;
+  *) FQDN="$(hostname -s).rc.fas.harvard.edu" ;;
+esac
+printf 'ssh %s@%s\n' "$USER" "$FQDN" > "$HOME/.cc-fasrc-host"
+
+if tmux has-session -t "$SESS" 2>/dev/null; then
+  echo "session '$SESS' already running on $FQDN"
+  echo "  attach: cc-up        kill: tmux kill-session -t $SESS"
+  exit 0
+fi
+
+tmux new-session -d -s "$SESS" "cc; exec bash"
+echo "started detached cc session '$SESS' on $FQDN"
+echo "  attach later: ssh $USER@$FQDN   then  cc-up"
+echo "  kill:         tmux kill-session -t $SESS"
