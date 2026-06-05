@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""cc-fasrc in-container Slurm shim — installed in the image as sbatch/squeue/...
+
+Inside the Apptainer sandbox there is no real Slurm. This shim writes the call as
+a request file into the shared proxy dir, waits for the host-side proxyd to run
+the real command, then reproduces its stdout/stderr/exit code. CC calls `sbatch`
+exactly as normal and never knows it was proxied.
+"""
+import json
+import os
+import sys
+import time
+import uuid
+
+VERB = os.path.basename(sys.argv[0])
+SANDBOX = os.environ.get("CC_SANDBOX_DIR", "")
+PROXY = os.environ.get("CC_SLURM_PROXY_DIR") or (
+    os.path.join(SANDBOX, ".cc", "slurm-proxy") if SANDBOX else "")
+TIMEOUT = float(os.environ.get("CC_PROXY_TIMEOUT", "600"))
+
+if not PROXY or not os.path.isdir(PROXY):
+    sys.stderr.write(
+        f"{VERB}: cc-fasrc slurm proxy not found at '{PROXY}'.\n"
+        f"        Start it on the host:  cc-proxyd start\n")
+    sys.exit(127)
+
+REQ = os.path.join(PROXY, "requests")
+RESD = os.path.join(PROXY, "results")
+os.makedirs(REQ, exist_ok=True)
+os.makedirs(RESD, exist_ok=True)
+
+rid = uuid.uuid4().hex
+req = {"id": rid, "verb": VERB, "argv": [VERB] + sys.argv[1:],
+       "cwd": os.getcwd(), "ts": time.time()}
+
+tmp = os.path.join(REQ, rid + ".json.tmp")
+with open(tmp, "w") as f:
+    json.dump(req, f)
+os.rename(tmp, os.path.join(REQ, rid + ".json"))   # atomic publish
+
+resf = os.path.join(RESD, rid + ".json")
+deadline = time.time() + TIMEOUT
+while time.time() < deadline:
+    if os.path.exists(resf):
+        try:
+            with open(resf) as f:
+                r = json.load(f)
+        except Exception:
+            time.sleep(0.1)
+            continue
+        try:
+            os.remove(resf)
+        except OSError:
+            pass
+        sys.stdout.write(r.get("stdout", ""))
+        sys.stderr.write(r.get("stderr", ""))
+        sys.exit(int(r.get("exit", 0)))
+    time.sleep(0.15)
+
+sys.stderr.write(f"{VERB}: cc-fasrc proxy timed out after {int(TIMEOUT)}s "
+                 f"(is `cc-proxyd` running on the host?)\n")
+sys.exit(124)

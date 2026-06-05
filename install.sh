@@ -64,10 +64,13 @@ echo "==> wrote $REPO_DIR/config.env"
 
 # ── 6. Put cc / cc-up on PATH ────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
-ln -sfn "$REPO_DIR/bin/cc"        "$HOME/.local/bin/cc"
-ln -sfn "$REPO_DIR/bin/cc-up"     "$HOME/.local/bin/cc-up"
-ln -sfn "$REPO_DIR/bin/cc-doctor" "$HOME/.local/bin/cc-doctor"
-echo "==> linked cc, cc-up, cc-doctor -> ~/.local/bin"
+for b in cc cc-up cc-doctor cc-iso cc-proxyd cc-approve; do
+  ln -sfn "$REPO_DIR/bin/$b" "$HOME/.local/bin/$b"
+done
+echo "==> linked cc, cc-up, cc-doctor, cc-iso, cc-proxyd, cc-approve -> ~/.local/bin"
+
+# Slurm submit-proxy queue dirs (used only by Apptainer/iso mode; harmless otherwise)
+mkdir -p "$SANDBOX/.cc/slurm-proxy"/{requests,results,processed,approve}
 
 # ── 7. Make sandboxed CC the default in your shells ─────────────────────────
 TAG="# cc-fasrc"

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Approve (or deny) a held sbatch submission when proxyd runs in CC_PROXY_MODE=hold.
+# The request id is printed by proxyd (see `cc-proxyd tail`) as "HOLD <id>: ...".
+#
+#   cc-approve <id>           # let it through
+#   cc-approve <id> --deny    # reject it
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+. "$HERE/config.env"
+PROXY="${CC_SLURM_PROXY_DIR:-$CC_SANDBOX_DIR/.cc/slurm-proxy}"
+
+id="${1:?usage: cc-approve <request-id> [--deny]}"
+mkdir -p "$PROXY/approve"
+if [ "${2:-}" = "--deny" ]; then
+  : > "$PROXY/approve/$id.deny"; echo "denied $id"
+else
+  : > "$PROXY/approve/$id";      echo "approved $id"
+fi

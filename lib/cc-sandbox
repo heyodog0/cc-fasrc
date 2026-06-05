@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # OPT-IN Apptainer hardening wrapper (see README "Apptainer mode").
-# Kernel-hard write boundary: only $CC_SANDBOX_DIR is bound read-write.
-#
-# NOTE: to let CC submit SLURM jobs from inside, append the host Slurm binds —
-# run on a login node to discover them:
-#   which sbatch squeue sacct; ldd "$(which sbatch)"; ls -d /etc/slurm /run/munge
-# then add: --bind /etc/slurm --bind /run/munge --bind "$(which sbatch)" ...
-# If the host binary won't run under the image glibc, use a host-side submit proxy.
+# Kernel-hard write boundary: only $CC_SANDBOX_DIR is bound read-write. Slurm
+# works via the host-side proxy (cc-proxyd) — the in-image sbatch/squeue shims
+# talk to it through the shared proxy dir, so NO host Slurm binaries are bound in
+# (sidesteps the glibc/munge problem of running host sbatch under the container).
+# Launch via `cc-iso`, which starts the proxy first.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 . "$HERE/config.env"
 SIF="${CC_SIF:-$HERE/cc.sif}"
+PROXY="${CC_SLURM_PROXY_DIR:-$CC_SANDBOX_DIR/.cc/slurm-proxy}"
+mkdir -p "$PROXY"/{requests,results}
 
 [ -f "$SIF" ] || { echo "build the image first:  apptainer build $SIF $HERE/cc.def"; exit 1; }
 
@@ -18,11 +18,12 @@ exec apptainer exec \
     --containall \
     --writable-tmpfs \
     --bind "$CC_SANDBOX_DIR":"$CC_SANDBOX_DIR" \
-    --bind "$HOME/.ssh":"/home/cc/.ssh":ro \
+    --bind "$HOME/.ssh":"$CC_SANDBOX_DIR/.cc/.ssh":ro \
     --pwd "$CC_SANDBOX_DIR" \
     --env HOME="$CC_SANDBOX_DIR/.cc" \
     --env CLAUDE_CONFIG_DIR="$CC_SANDBOX_DIR/.cc/.claude" \
     --env CC_SANDBOX_DIR="$CC_SANDBOX_DIR" \
+    --env CC_SLURM_PROXY_DIR="$PROXY" \
     --env TMPDIR="$CC_SANDBOX_DIR/.tmp" \
     "$SIF" \
     claude --permission-mode "${CC_MODE:-acceptEdits}" "$@"

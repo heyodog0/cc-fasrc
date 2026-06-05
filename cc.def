@@ -2,14 +2,26 @@ Bootstrap: docker
 From: node:22-bookworm-slim
 
 # OPT-IN hardening image (see README "Apptainer mode"). Self-contained toolchain
-# so CC can edit + run smokes without binding host node/uv. Submitting SLURM jobs
-# from inside still needs host sbatch+munge bound in (glibc-fragile) or a proxy.
+# so CC can edit + run smokes without binding host node/uv. Slurm is reached via
+# the host-side proxy: the shim below is installed AS sbatch/squeue/... so calls
+# inside the container are brokered out to cc-proxyd on the host.
+#
+# Build from the REPO ROOT so the %files path resolves:
+#   cd ~/code/cc-fasrc && apptainer build cc.sif cc.def
+
+%files
+    lib/slurm-proxy/shim /usr/local/bin/cc-slurm-shim
 
 %post
     apt-get update && apt-get install -y --no-install-recommends \
-        git ca-certificates curl openssh-client rsync
+        git ca-certificates curl openssh-client rsync python3
     npm install -g @anthropic-ai/claude-code pnpm@9.15.0
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+    # Install the Slurm shim under each brokered verb name (first on PATH).
+    chmod +x /usr/local/bin/cc-slurm-shim
+    for v in sbatch squeue sacct scancel sinfo scontrol; do
+        ln -sf /usr/local/bin/cc-slurm-shim /usr/local/bin/$v
+    done
     rm -rf /var/lib/apt/lists/*
 
 %environment

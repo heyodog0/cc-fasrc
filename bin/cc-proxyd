@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Control the host-side Slurm submit proxy (Apptainer / iso mode).
+# Runs OUTSIDE the container, in your real login-shell environment — so jobs it
+# submits inherit your real PATH / NODE_GYM / UV_CACHE_DIR (from ~/.bashrc).
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+. "$HERE/config.env"
+
+PROXY="${CC_SLURM_PROXY_DIR:-$CC_SANDBOX_DIR/.cc/slurm-proxy}"
+PID="$PROXY/proxyd.pid"
+LOG="$PROXY/proxyd.log"
+export CC_SANDBOX_DIR CC_SLURM_PROXY_DIR="$PROXY"
+export CC_PROXY_MODE="${CC_PROXY_MODE:-auto}"
+
+alive() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
+
+case "${1:-status}" in
+  start)
+    mkdir -p "$PROXY"/{requests,results,processed,approve}
+    if alive; then echo "proxyd already running (pid $(cat "$PID"))"; exit 0; fi
+    nohup python3 "$HERE/lib/slurm-proxy/proxyd" >>"$LOG" 2>&1 &
+    echo $! > "$PID"
+    sleep 0.4
+    if alive; then echo "started proxyd (pid $(cat "$PID"), mode=$CC_PROXY_MODE)  log: $LOG"
+    else echo "proxyd failed to start — see $LOG"; tail -5 "$LOG" 2>/dev/null; exit 1; fi
+    ;;
+  stop)
+    if alive; then kill "$(cat "$PID")" && rm -f "$PID" && echo "stopped"; else echo "not running"; fi
+    ;;
+  status)
+    if alive; then echo "running (pid $(cat "$PID"), mode=$CC_PROXY_MODE, proxy=$PROXY)";
+    else echo "stopped"; fi
+    ;;
+  tail) exec tail -f "$LOG" ;;
+  *) echo "usage: cc-proxyd {start|stop|status|tail}"; exit 1 ;;
+esac
