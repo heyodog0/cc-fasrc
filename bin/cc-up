@@ -4,15 +4,21 @@
 # FASRC load-balances several login nodes and the session lives on ONE of them.
 set -euo pipefail
 SESS="${1:-cc}"
-HOST="$(hostname -s)"
 
-# Record where the session lives so reconnection is unambiguous across the
-# round-robin login nodes (FASRC has several; tmux lives on exactly one).
-echo "$HOST" > "$HOME/.cc-fasrc-host"
+# FASRC round-robins login.rc.fas.harvard.edu across two pools (boslogin0N and
+# holylogin0N); your tmux lives on exactly ONE host. Record its full address so
+# reconnecting is unambiguous no matter which pool you landed on.
+FQDN="$(hostname -f 2>/dev/null || true)"
+case "$FQDN" in
+  *.rc.fas.harvard.edu) : ;;                       # already a usable FQDN
+  *) FQDN="$(hostname -s).rc.fas.harvard.edu" ;;   # fall back to short+domain
+esac
+RECONNECT="ssh ${USER}@${FQDN}"
+printf '%s\n' "$RECONNECT" > "$HOME/.cc-fasrc-host"
 
 echo "cc-fasrc session : $SESS"
-echo "pinned to node   : $HOST   (saved to ~/.cc-fasrc-host)"
-echo "reconnect later  : ssh <you>@${HOST}.rc.fas.harvard.edu  then  cc-up"
+echo "pinned to node   : $FQDN   (bos or holy — saved to ~/.cc-fasrc-host)"
+echo "reconnect later  : $RECONNECT   then  cc-up"
 echo
 
 # Reattach if it exists; otherwise create it running `cc`. `exec bash` keeps the

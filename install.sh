@@ -107,5 +107,8 @@ echo "    cc-doctor        # verify everything on this node (do this first)"
 echo "    cc-up            # start/reattach the perpetual sandboxed session"
 echo
 echo "NOTE: the 'claude'->cc alias applies in NEW shells. In THIS one, type 'cc'"
-echo "      (or run: source ~/.bashrc). Reconnect later pinned to THIS login node:"
-echo "      ssh \$(hostname).rc.fas.harvard.edu"
+echo "      (or run: source ~/.bashrc)."
+_fqdn="$(hostname -f 2>/dev/null || true)"
+case "$_fqdn" in *.rc.fas.harvard.edu) : ;; *) _fqdn="$(hostname -s).rc.fas.harvard.edu" ;; esac
+echo "      Reconnect later pinned to THIS login node (bos or holy):"
+echo "      ssh ${USER}@${_fqdn}"
