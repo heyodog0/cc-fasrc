@@ -79,7 +79,7 @@ for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
   if ! grep -q "$TAG" "$RC" 2>/dev/null; then
     {
       printf '\n%s\n' "$TAG"
-      printf 'export PATH="$HOME/.local/bin:$PATH"\n'
+      printf 'export PATH="$HOME/.local/bin:$HOME/.local-node/bin:$PATH"\n'
       printf 'alias claude="cc"        # every claude launch is sandboxed to cc-fasrc\n'
     } >> "$RC"
     echo "==> wired PATH + claude->cc alias into $RC"
